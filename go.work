@@ -1,0 +1,7 @@
+go 1.21.2
+
+use .
+use ./shared
+use ./client-pub
+use ./client-sub
+use ./server
