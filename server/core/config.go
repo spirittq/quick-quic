@@ -15,5 +15,5 @@ type Counter struct {
 var pubCount, subCount Counter
 var tlsConfig *tls.Config
 var quicConfig *quic.Config
-var messageChan chan string
+var messageChan chan []byte
 var subConnectedChan, subNotConnectedChan chan bool

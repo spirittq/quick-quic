@@ -14,7 +14,7 @@ import (
 
 var RunServer = func(ctx context.Context) {
 	logger := log.Default()
-	messageChan = make(chan string, 1)
+	messageChan = make(chan []byte, 1)
 	subNotConnectedChan = make(chan bool, 1)
 	subConnectedChan = make(chan bool, 1)
 
@@ -31,8 +31,8 @@ var RunServer = func(ctx context.Context) {
 		Certificates: []tls.Certificate{cert},
 	}
 	quicConfig = &quic.Config{
-		MaxIdleTimeout: time.Second * 10,
-		KeepAlivePeriod: time.Second * 5,
+		MaxIdleTimeout:  time.Second * 5,
+		KeepAlivePeriod: time.Second * 2,
 	}
 
 	logger.Println("Initializing pub server")
@@ -112,7 +112,13 @@ var sendMessagePub = func(ctx context.Context, conn quic.Connection, wg *sync.Wa
 	logger := log.Default()
 
 	go func() {
-		msg := "New subscriber has connected"
+		msgToPub := shared.MessageStream{
+			Message: "New subscriber has connected",
+		}
+		msg, err := shared.ToJson[shared.MessageStream](msgToPub)
+		if err != nil {
+			logger.Printf("Unable to marshal message: %v", err)
+		}
 		for {
 			select {
 			case <-ctx.Done():
@@ -127,7 +133,13 @@ var sendMessagePub = func(ctx context.Context, conn quic.Connection, wg *sync.Wa
 	}()
 
 	go func() {
-		msg := "No subscribers are connected"
+		msgToPub := shared.MessageStream{
+			Message: "No subscribers are connected",
+		}
+		msg, err := shared.ToJson[shared.MessageStream](msgToPub)
+		if err != nil {
+			logger.Printf("Unable to marshal message: %v", err)
+		}
 		for {
 			select {
 			case <-ctx.Done():
@@ -161,8 +173,8 @@ var receiveMessagePub = func(ctx context.Context, conn quic.Connection, wg *sync
 				return
 			}
 			logger.Println("Pub message received")
-			for i := 0; i < pubCount.Count; i++ {
-				messageChan <- string(receivedData)
+			for i := 0; i < subCount.Count; i++ {
+				messageChan <- receivedData
 			}
 		}(stream)
 	}
@@ -192,7 +204,9 @@ var handleSubClient = func(ctx context.Context, conn quic.Connection) {
 	logger := log.Default()
 	logger.Println("New Sub connected")
 
-	subConnectedChan <- true
+	if pubCount.Count > 0 {
+		subConnectedChan <- true
+	}
 	subCount.Mu.Lock()
 	subCount.Count++
 	subCount.Mu.Unlock()

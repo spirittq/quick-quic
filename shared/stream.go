@@ -19,14 +19,14 @@ func ReadStream(stream quic.Stream) ([]byte, error) {
 	return receivedData, nil
 }
 
-func WriteStream(conn quic.Connection, msg string) error {
+func WriteStream(conn quic.Connection, msg []byte) error {
 	var closeErr error
 
 	stream, err := conn.OpenStream()
 	if err != nil {
 		return err
 	}
-	_, err = stream.Write([]byte(msg))
+	_, err = stream.Write(msg)
 	stream.Close()
 
 	if err != nil {

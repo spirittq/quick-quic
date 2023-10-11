@@ -22,8 +22,8 @@ var RunSubClient = func(ctx context.Context) {
 
 	tlsConfig = &tls.Config{InsecureSkipVerify: true}
 	quicConfig = &quic.Config{
-		MaxIdleTimeout: time.Second * 10,
-		KeepAlivePeriod: time.Second * 5,
+		MaxIdleTimeout: time.Second * 5,
+		KeepAlivePeriod: time.Second * 2,
 	}
 
 	for {
@@ -59,7 +59,12 @@ var receiveMessage = func(ctx context.Context, conn quic.Connection) {
 				logger.Printf("Failed to read message: %v", err)
 				return
 			}
-			fmt.Println(string(receivedData))
+			unmarshalledMsg, err := shared.FromJson[shared.MessageStream](receivedData)
+			if err != nil {
+				logger.Printf("Unable to unmarshall message: %v", err)
+				return
+			}
+			fmt.Println(unmarshalledMsg.Message)
 		}(stream)
 	}
 }

@@ -15,7 +15,7 @@ import (
 )
 
 var connectingToServer chan bool
-var jugglingMessage chan string
+var jugglingMessage chan shared.MessageStream
 
 func RunPubClient(ctx context.Context) {
 	logger := log.Default()
@@ -23,13 +23,13 @@ func RunPubClient(ctx context.Context) {
 	var tlsConfig *tls.Config
 	var quicConfig *quic.Config
 	connectingToServer = make(chan bool, 1)
-	jugglingMessage = make(chan string, 1)
-	jugglingMessage <- ""
+	jugglingMessage = make(chan shared.MessageStream, 1)
+	jugglingMessage <- shared.MessageStream{Empty: true}
 
 	tlsConfig = &tls.Config{InsecureSkipVerify: true}
 	quicConfig = &quic.Config{
-		MaxIdleTimeout: time.Second * 10,
-		KeepAlivePeriod: time.Second * 5,
+		MaxIdleTimeout:  time.Second * 5,
+		KeepAlivePeriod: time.Second * 2,
 	}
 
 	for {
@@ -54,16 +54,16 @@ func sendMessage(ctx context.Context, conn quic.Connection) {
 	initMsg := <-jugglingMessage
 
 	for {
-		var msg string
+		var msg shared.MessageStream
 
-		switch initMsg {
-		case "":
+		switch {
+		case initMsg.Empty:
 			reader := bufio.NewReader(os.Stdin)
-			msg, _ = reader.ReadString('\n')
-			msg = strings.TrimSpace(msg)
+			msg.Message, _ = reader.ReadString('\n')
+			msg.Message = strings.TrimSpace(msg.Message)
 		default:
 			msg = initMsg
-			initMsg = ""
+			initMsg.Empty = true
 		}
 
 		select {
@@ -71,7 +71,11 @@ func sendMessage(ctx context.Context, conn quic.Connection) {
 			jugglingMessage <- msg
 			return
 		default:
-			err := shared.WriteStream(conn, msg)
+			marshalledMsg, err := shared.ToJson[shared.MessageStream](msg)
+			if err != nil {
+				logger.Printf("Unable to marshall message: %v", err)
+			}
+			err = shared.WriteStream(conn, marshalledMsg)
 			if err != nil {
 				logger.Printf("Failed to send message: %v", err)
 			}
@@ -98,7 +102,12 @@ func receiveMessage(ctx context.Context, conn quic.Connection) {
 				logger.Printf("Failed to read message: %v", err)
 				return
 			}
-			fmt.Println(string(receivedData))
+			unmarshalledMsg, err := shared.FromJson[shared.MessageStream](receivedData)
+			if err != nil {
+				logger.Printf("Unable to unmarshall message: %v", err)
+				return
+			}
+			fmt.Println(unmarshalledMsg.Message)
 		}(stream)
 	}
 }
