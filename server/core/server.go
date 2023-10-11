@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"shared"
+	"sync"
 	"time"
 
 	"github.com/quic-go/quic-go"
@@ -100,22 +101,25 @@ var handlePubClient = func(conn quic.Connection, ctx context.Context) {
 		cancel()
 	}()
 
-	go sendMessagePub(pubClientCtx, conn)
-	receiveMessagePub(pubClientCtx, conn)
-
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go sendMessagePub(pubClientCtx, conn, &wg)
+	wg.Add(1)
+	go receiveMessagePub(pubClientCtx, conn, &wg)
+	wg.Wait()
 }
 
-var sendMessagePub = func(ctx context.Context, conn quic.Connection) {
+var sendMessagePub = func(ctx context.Context, conn quic.Connection, wg *sync.WaitGroup) {
+	defer wg.Done()
 	logger := log.Default()
 
 	go func() {
 		msg := "New subscriber has connected"
 		for {
-			<-subConnectedChan
 			select {
 			case <-ctx.Done():
 				return
-			default:
+			case <-subConnectedChan:
 				err := shared.WriteStream(conn, msg)
 				if err != nil {
 					logger.Printf("Failed to send message: %v", err)
@@ -127,11 +131,10 @@ var sendMessagePub = func(ctx context.Context, conn quic.Connection) {
 	go func() {
 		msg := "No subscribers are connected"
 		for {
-			<-subNotConnectedChan
 			select {
 			case <-ctx.Done():
 				return
-			default:
+			case <-subNotConnectedChan:
 				err := shared.WriteStream(conn, msg)
 				if err != nil {
 					logger.Printf("Failed to send message: %v", err)
@@ -141,9 +144,10 @@ var sendMessagePub = func(ctx context.Context, conn quic.Connection) {
 	}()
 }
 
-var receiveMessagePub = func(ctx context.Context, conn quic.Connection) {
+var receiveMessagePub = func(ctx context.Context, conn quic.Connection, wg *sync.WaitGroup) {
+	defer wg.Done()
+
 	logger := log.Default()
-	defer ctx.Done()
 
 	for {
 		stream, err := conn.AcceptStream(ctx)
