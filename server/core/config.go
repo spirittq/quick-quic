@@ -16,3 +16,4 @@ var pubCount, subCount Counter
 var tlsConfig *tls.Config
 var quicConfig *quic.Config
 var messageChan chan string
+var subConnectedChan, subNotConnectedChan chan bool

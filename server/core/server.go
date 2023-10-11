@@ -14,6 +14,8 @@ import (
 var RunServer = func(ctx context.Context) {
 	logger := log.Default()
 	messageChan = make(chan string)
+	subNotConnectedChan = make(chan bool)
+	subConnectedChan = make(chan bool)
 
 	logger.Println("Loading temp certificate")
 
@@ -56,15 +58,28 @@ var initPubServer = func(ctx context.Context) {
 		log.Fatalf("Error during pub server initialization: %v", err)
 	}
 
-	for {
-		conn, err := ln.Accept(ctx)
-		if err != nil {
-			logger.Printf("Failed to accept pub client connection: %v", err)
-			continue
+	go func() {
+		for {
+			conn, err := ln.Accept(ctx)
+			if err != nil {
+				logger.Printf("Failed to accept pub client connection: %v", err)
+				continue
+			}
+			go handlePubClient(conn, ctx)
 		}
-		go handlePubClient(conn, ctx)
-	}
+	}()
 
+	go func() {
+		for {
+			if subCount.Count == 0 {
+				for i := 0; i < pubCount.Count; i++ {
+					subNotConnectedChan <- true
+
+				}
+				time.Sleep(time.Second * 3)
+			}
+		}
+	}()
 }
 
 var handlePubClient = func(conn quic.Connection, ctx context.Context) {
@@ -85,11 +100,56 @@ var handlePubClient = func(conn quic.Connection, ctx context.Context) {
 		cancel()
 	}()
 
+	go sendMessagePub(pubClientCtx, conn)
+	receiveMessagePub(pubClientCtx, conn)
+
+}
+
+var sendMessagePub = func(ctx context.Context, conn quic.Connection) {
+	logger := log.Default()
+
+	go func() {
+		msg := "New subscriber has connected"
+		for {
+			<-subConnectedChan
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				err := shared.WriteStream(conn, msg)
+				if err != nil {
+					logger.Printf("Failed to send message: %v", err)
+				}
+			}
+		}
+	}()
+
+	go func() {
+		msg := "No subscribers are connected"
+		for {
+			<-subNotConnectedChan
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				err := shared.WriteStream(conn, msg)
+				if err != nil {
+					logger.Printf("Failed to send message: %v", err)
+				}
+			}
+		}
+	}()
+}
+
+var receiveMessagePub = func(ctx context.Context, conn quic.Connection) {
+	logger := log.Default()
+	defer ctx.Done()
+
 	for {
-		stream, err := conn.AcceptStream(pubClientCtx)
+		stream, err := conn.AcceptStream(ctx)
 		if err != nil {
 			logger.Printf("Pub closed with %v", err)
-			break
+			return
 		}
 
 		go func(stream quic.Stream) {
@@ -98,7 +158,7 @@ var handlePubClient = func(conn quic.Connection, ctx context.Context) {
 				logger.Printf("Failed to read message: %v", err)
 				return
 			}
-			logger.Printf("Pub sent message: %v", string(receivedData))
+			logger.Println("Pub message received")
 			messageChan <- string(receivedData)
 		}(stream)
 	}

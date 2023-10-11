@@ -31,20 +31,22 @@ func RunClient(ctx context.Context) {
 		MaxIdleTimeout: 5 * time.Second,
 	}
 
-	for {
-		logger.Println("Connecting to the server")
-		clientCtx, cancel := context.WithCancel(ctx)
-		conn, err := quic.DialAddr(clientCtx, "localhost:3001", tlsConfig, quicConfig)
-		if err != nil {
-			logger.Fatalf("Could not connect to the server: %v", err)
-		}
-		fmt.Println("Connection established")
+	go func() {
+		for {
+			logger.Println("Connecting to the server")
+			clientCtx, cancel := context.WithCancel(ctx)
+			conn, err := quic.DialAddr(clientCtx, "localhost:3001", tlsConfig, quicConfig)
+			if err != nil {
+				logger.Fatalf("Could not connect to the server: %v", err)
+			}
+			fmt.Println("Connection established")
 
-		go sendMessage(clientCtx, conn)
-		go receiveMessage(clientCtx, conn)
-		<-connectingToServer
-		cancel()
-	}
+			go sendMessage(clientCtx, conn)
+			go receiveMessage(clientCtx, conn)
+			<-connectingToServer
+			cancel()
+		}
+	}()
 }
 
 func sendMessage(ctx context.Context, conn quic.Connection) {
@@ -92,7 +94,6 @@ func receiveMessage(ctx context.Context, conn quic.Connection) {
 		}
 
 		go func(stream quic.Stream) {
-
 			receivedData, err := shared.ReadStream(stream)
 			if err != nil {
 				logger.Printf("Failed to read message: %v", err)

@@ -14,7 +14,7 @@ func main() {
 	ctx := context.Background()
 	defer ctx.Done()
 
-	go core.RunClient(ctx)
+	core.RunClient(ctx)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt)
