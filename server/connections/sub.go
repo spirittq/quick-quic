@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"shared"
-	"sync"
 
 	"github.com/quic-go/quic-go"
 )
@@ -35,61 +34,32 @@ var handleSubClient = func(ctx context.Context, conn quic.Connection) {
 	logger := log.Default()
 	logger.Println("New Sub connected")
 
-	for i := 0; i < pubCount.Count; i++ {
-		SubConnectedChan <- true
+	for i := 0; i < PubCount.Count; i++ {
+		NewSubChan <- NewSubMessage
 	}
 
-	subCount.Mu.Lock()
-	subCount.Count++
-	subCount.Mu.Unlock()
+	SubCount.Mu.Lock()
+	SubCount.Count++
+	SubCount.Mu.Unlock()
 
 	subClientCtx, cancel := context.WithCancel(ctx)
 
 	defer func() {
-		subCount.Mu.Lock()
-		subCount.Count--
-		subCount.Mu.Unlock()
+		SubCount.Mu.Lock()
+		SubCount.Count--
+		SubCount.Mu.Unlock()
 		cancel()
 	}()
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go sendMessageSub(subClientCtx, conn, &wg)
-	wg.Add(1)
-	go acceptStreamSub(subClientCtx, conn, &wg)
-	wg.Wait()
-}
+	acceptStreamChan := make(chan quic.Stream, 1)
 
-var sendMessageSub = func(ctx context.Context, conn quic.Connection, wg *sync.WaitGroup) {
-	defer wg.Done()
-	logger := log.Default()
-
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				fmt.Println("sub canceled")
-				return
-			case msg := <-MessageChan:
-				err := shared.WriteStream(conn, msg)
-				if err != nil {
-					logger.Printf("Failed to send message: %v", err)
-				}
-			}
-		}
-	}()
-}
-
-var acceptStreamSub = func(ctx context.Context, conn quic.Connection, wg *sync.WaitGroup) {
-	defer wg.Done()
-
-	logger := log.Default()
-
-	for {
-		_, err := conn.AcceptStream(ctx)
-		if err != nil {
-			logger.Printf("Sub closed with %v", err)
-			return
-		}
+	go sendMessageToSub(subClientCtx, conn)
+	err := shared.AcceptStream(subClientCtx, conn, acceptStreamChan)
+	if err != nil {
+		logger.Printf("Sub disconnected with: %v", err)
 	}
+}
+
+var sendMessageToSub = func(ctx context.Context, conn quic.Connection) {
+	go sendMessageToClient(ctx, conn, MessageChan)
 }

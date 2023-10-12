@@ -1,6 +1,7 @@
 package shared
 
 import (
+	"context"
 	"io"
 
 	"github.com/quic-go/quic-go"
@@ -33,4 +34,16 @@ func WriteStream(conn quic.Connection, msg []byte) error {
 		return err
 	}
 	return closeErr
+}
+
+func AcceptStream(ctx context.Context, conn quic.Connection, acceptStreamChan chan quic.Stream) (error) {
+	defer ctx.Done()
+
+	for {
+		stream, err := conn.AcceptStream(ctx)
+		if err != nil {
+			return err
+		}
+		acceptStreamChan <- stream
+	}
 }

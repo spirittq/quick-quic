@@ -11,14 +11,12 @@ import (
 	"github.com/quic-go/quic-go"
 )
 
-var connectingToServer chan bool
-
 var RunSubClient = func(ctx context.Context) {
 	logger := log.Default()
 
 	var tlsConfig *tls.Config
 	var quicConfig *quic.Config
-	connectingToServer = make(chan bool, 1)
+	acceptStreamChan := make(chan quic.Stream, 1)
 
 	tlsConfig = &tls.Config{InsecureSkipVerify: true}
 	quicConfig = &quic.Config{
@@ -35,23 +33,21 @@ var RunSubClient = func(ctx context.Context) {
 		}
 		fmt.Println("Connection established")
 
-		go receiveMessage(clientCtx, conn)
-		<-connectingToServer
+		go receiveMessage(clientCtx, conn, acceptStreamChan)
+		err = shared.AcceptStream(clientCtx, conn, acceptStreamChan)
+		if err != nil {
+			logger.Printf("Lost connection to server with %v", err)
+		}
 		cancel()
 	}
 }
 
-var receiveMessage = func(ctx context.Context, conn quic.Connection) {
+func receiveMessage(ctx context.Context, conn quic.Connection, acceptStreamChan chan quic.Stream) {
 	logger := log.Default()
 	defer ctx.Done()
 
 	for {
-		stream, err := conn.AcceptStream(ctx)
-		if err != nil {
-			logger.Printf("Lost connection to server with %v", err)
-			connectingToServer <- true
-			return
-		}
+		stream := <-acceptStreamChan
 
 		go func(stream quic.Stream) {
 			receivedData, err := shared.ReadStream(stream)
@@ -64,7 +60,7 @@ var receiveMessage = func(ctx context.Context, conn quic.Connection) {
 				logger.Printf("Unable to unmarshall message: %v", err)
 				return
 			}
-			fmt.Println(unmarshalledMsg.Message)
+			logger.Println(unmarshalledMsg.Message)
 		}(stream)
 	}
 }

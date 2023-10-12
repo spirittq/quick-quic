@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"log"
 	"shared"
-	"sync"
-	"time"
 
 	"github.com/quic-go/quic-go"
 )
@@ -32,17 +30,6 @@ var InitPubServer = func(ctx context.Context, tlsConfig *tls.Config, quicConfig 
 		}
 	}()
 
-	go func() {
-		for {
-			if subCount.Count == 0 {
-				for i := 0; i < pubCount.Count; i++ {
-					SubNotConnectedChan <- true
-
-				}
-				time.Sleep(time.Second * 10)
-			}
-		}
-	}()
 }
 
 var handlePubClient = func(ctx context.Context, conn quic.Connection) {
@@ -50,86 +37,39 @@ var handlePubClient = func(ctx context.Context, conn quic.Connection) {
 	logger := log.Default()
 	logger.Println("New Pub connected")
 
-	pubCount.Mu.Lock()
-	pubCount.Count++
-	pubCount.Mu.Unlock()
+	PubCount.Mu.Lock()
+	PubCount.Count++
+	PubCount.Mu.Unlock()
 
 	pubClientCtx, cancel := context.WithCancel(ctx)
 
 	defer func() {
-		pubCount.Mu.Lock()
-		pubCount.Count--
-		pubCount.Mu.Unlock()
+		PubCount.Mu.Lock()
+		PubCount.Count--
+		PubCount.Mu.Unlock()
 		cancel()
 	}()
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go sendMessagePub(pubClientCtx, conn, &wg)
-	wg.Add(1)
-	go receiveMessagePub(pubClientCtx, conn, &wg)
-	wg.Wait()
+	acceptStreamChan := make(chan quic.Stream, 1)
+
+	go sendMessageToPub(pubClientCtx, conn)
+	go receiveMessageFromPub(pubClientCtx, conn, acceptStreamChan)
+	err := shared.AcceptStream(pubClientCtx, conn, acceptStreamChan)
+	if err != nil {
+		logger.Printf("Pub disconnected with: %v", err)
+	}
 }
 
-var sendMessagePub = func(ctx context.Context, conn quic.Connection, wg *sync.WaitGroup) {
-	defer wg.Done()
-	logger := log.Default()
-
-	go func() {
-		msgToPub := shared.MessageStream{
-			Message: "New subscriber has connected",
-		}
-		msg, err := shared.ToJson[shared.MessageStream](msgToPub)
-		if err != nil {
-			logger.Printf("Unable to marshal message: %v", err)
-		}
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-SubConnectedChan:
-				err := shared.WriteStream(conn, msg)
-				if err != nil {
-					logger.Printf("Failed to send message: %v", err)
-				}
-			}
-		}
-	}()
-
-	go func() {
-		msgToPub := shared.MessageStream{
-			Message: "No subscribers are connected",
-		}
-		msg, err := shared.ToJson[shared.MessageStream](msgToPub)
-		if err != nil {
-			logger.Printf("Unable to marshal message: %v", err)
-		}
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-SubNotConnectedChan:
-				err := shared.WriteStream(conn, msg)
-				if err != nil {
-					logger.Printf("Failed to send message: %v", err)
-				}
-			}
-		}
-	}()
+var sendMessageToPub = func(ctx context.Context, conn quic.Connection) {
+	go sendMessageToClient(ctx, conn, NewSubChan)
+	go sendMessageToClient(ctx, conn, NoSubsChan)
 }
 
-var receiveMessagePub = func(ctx context.Context, conn quic.Connection, wg *sync.WaitGroup) {
-
-	defer wg.Done()
-
+var receiveMessageFromPub = func(ctx context.Context, conn quic.Connection, acceptStreamChan chan quic.Stream) {
 	logger := log.Default()
 
 	for {
-		stream, err := conn.AcceptStream(ctx)
-		if err != nil {
-			logger.Printf("Pub closed with %v", err)
-			return
-		}
+		stream := <-acceptStreamChan
 
 		go func(stream quic.Stream) {
 			receivedData, err := shared.ReadStream(stream)
@@ -137,9 +77,14 @@ var receiveMessagePub = func(ctx context.Context, conn quic.Connection, wg *sync
 				logger.Printf("Failed to read message: %v", err)
 				return
 			}
+			unmarshalledData, err := shared.FromJson[shared.MessageStream](receivedData)
+			if err != nil {
+				logger.Printf("Failed to unmarshall message: %v", err)
+				return
+			}
 			logger.Println("Pub message received")
-			for i := 0; i < subCount.Count; i++ {
-				MessageChan <- receivedData
+			for i := 0; i < SubCount.Count; i++ {
+				MessageChan <- unmarshalledData
 			}
 		}(stream)
 	}
