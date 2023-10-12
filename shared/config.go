@@ -1,8 +1,15 @@
 package shared
 
-const ServerAddr = "localhost"
-const PortPub = "3001"
-const PortSub = "3002"
-const CertPath = "../certificates/"
-const CertTemp = "ca.crt"
-const CertKeyTemp = "ca.key"
+const (
+	ServerAddr  = "localhost"
+	PortPub     = "3001"
+	PortSub     = "3002"
+	CertPath    = "../certificates/"
+	CertTemp    = "ca.crt"
+	CertKeyTemp = "ca.key"
+)
+
+const (
+	MaxIdleTimeout  = 5
+	KeepAlivePeriod = 5
+)

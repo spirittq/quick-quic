@@ -5,8 +5,8 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log"
+	"server/connections"
 	"shared"
-	"sync"
 	"time"
 
 	"github.com/quic-go/quic-go"
@@ -14,9 +14,9 @@ import (
 
 var RunServer = func(ctx context.Context) {
 	logger := log.Default()
-	messageChan = make(chan []byte, 1)
-	subNotConnectedChan = make(chan bool, 1)
-	subConnectedChan = make(chan bool, 1)
+	connections.MessageChan = make(chan []byte, 1)
+	connections.SubNotConnectedChan = make(chan bool, 1)
+	connections.SubConnectedChan = make(chan bool, 1)
 
 	logger.Println("Loading temp certificate")
 
@@ -27,237 +27,22 @@ var RunServer = func(ctx context.Context) {
 
 	logger.Println("Certificates loaded")
 
-	tlsConfig = &tls.Config{
+	tlsConfig := &tls.Config{
 		Certificates: []tls.Certificate{cert},
 	}
-	quicConfig = &quic.Config{
-		MaxIdleTimeout:  time.Second * 5,
-		KeepAlivePeriod: time.Second * 2,
+	quicConfig := &quic.Config{
+		MaxIdleTimeout:  time.Second * shared.MaxIdleTimeout,
+		KeepAlivePeriod: time.Second * shared.KeepAlivePeriod,
 	}
 
 	logger.Println("Initializing pub server")
 
-	go initPubServer(ctx)
+	go connections.InitPubServer(ctx, tlsConfig, quicConfig)
 
 	logger.Printf("Pub server initialization complete, listening on: %v", shared.PortPub)
 	logger.Println("Initializing sub server")
 
-	go initSubServer(ctx)
+	go connections.InitSubServer(ctx, tlsConfig, quicConfig)
 
 	logger.Printf("Sub server initialization complete, listening on: %v", shared.PortSub)
-
-}
-
-var initPubServer = func(ctx context.Context) {
-
-	logger := log.Default()
-
-	ln, err := quic.ListenAddr(fmt.Sprintf("%v:%v", shared.ServerAddr, shared.PortPub), tlsConfig, quicConfig)
-	if err != nil {
-		log.Fatalf("Error during pub server initialization: %v", err)
-	}
-
-	go func() {
-		for {
-			conn, err := ln.Accept(ctx)
-			if err != nil {
-				logger.Printf("Failed to accept pub client connection: %v", err)
-				continue
-			}
-			go handlePubClient(ctx, conn)
-		}
-	}()
-
-	go func() {
-		for {
-			if subCount.Count == 0 {
-				for i := 0; i < pubCount.Count; i++ {
-					subNotConnectedChan <- true
-
-				}
-				time.Sleep(time.Second * 10)
-			}
-		}
-	}()
-}
-
-var handlePubClient = func(ctx context.Context, conn quic.Connection) {
-
-	logger := log.Default()
-	logger.Println("New Pub connected")
-
-	pubCount.Mu.Lock()
-	pubCount.Count++
-	pubCount.Mu.Unlock()
-
-	pubClientCtx, cancel := context.WithCancel(ctx)
-
-	defer func() {
-		pubCount.Mu.Lock()
-		pubCount.Count--
-		pubCount.Mu.Unlock()
-		cancel()
-	}()
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go sendMessagePub(pubClientCtx, conn, &wg)
-	wg.Add(1)
-	go receiveMessagePub(pubClientCtx, conn, &wg)
-	wg.Wait()
-}
-
-var sendMessagePub = func(ctx context.Context, conn quic.Connection, wg *sync.WaitGroup) {
-	defer wg.Done()
-	logger := log.Default()
-
-	go func() {
-		msgToPub := shared.MessageStream{
-			Message: "New subscriber has connected",
-		}
-		msg, err := shared.ToJson[shared.MessageStream](msgToPub)
-		if err != nil {
-			logger.Printf("Unable to marshal message: %v", err)
-		}
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-subConnectedChan:
-				err := shared.WriteStream(conn, msg)
-				if err != nil {
-					logger.Printf("Failed to send message: %v", err)
-				}
-			}
-		}
-	}()
-
-	go func() {
-		msgToPub := shared.MessageStream{
-			Message: "No subscribers are connected",
-		}
-		msg, err := shared.ToJson[shared.MessageStream](msgToPub)
-		if err != nil {
-			logger.Printf("Unable to marshal message: %v", err)
-		}
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-subNotConnectedChan:
-				err := shared.WriteStream(conn, msg)
-				if err != nil {
-					logger.Printf("Failed to send message: %v", err)
-				}
-			}
-		}
-	}()
-}
-
-var receiveMessagePub = func(ctx context.Context, conn quic.Connection, wg *sync.WaitGroup) {
-	defer wg.Done()
-
-	logger := log.Default()
-
-	for {
-		stream, err := conn.AcceptStream(ctx)
-		if err != nil {
-			logger.Printf("Pub closed with %v", err)
-			return
-		}
-
-		go func(stream quic.Stream) {
-			receivedData, err := shared.ReadStream(stream)
-			if err != nil {
-				logger.Printf("Failed to read message: %v", err)
-				return
-			}
-			logger.Println("Pub message received")
-			for i := 0; i < subCount.Count; i++ {
-				messageChan <- receivedData
-			}
-		}(stream)
-	}
-}
-
-var initSubServer = func(ctx context.Context) {
-	logger := log.Default()
-
-	ln, err := quic.ListenAddr(fmt.Sprintf("%v:%v", shared.ServerAddr, shared.PortSub), tlsConfig, quicConfig)
-	if err != nil {
-		log.Fatalf("Error during sub server initialization: %v", err)
-	}
-
-	go func() {
-		for {
-			conn, err := ln.Accept(ctx)
-			if err != nil {
-				logger.Printf("Failed to accept sub client connection: %v", err)
-				continue
-			}
-			go handleSubClient(ctx, conn)
-		}
-	}()
-}
-
-var handleSubClient = func(ctx context.Context, conn quic.Connection) {
-	logger := log.Default()
-	logger.Println("New Sub connected")
-
-	if pubCount.Count > 0 {
-		subConnectedChan <- true
-	}
-	subCount.Mu.Lock()
-	subCount.Count++
-	subCount.Mu.Unlock()
-
-	subClientCtx, cancel := context.WithCancel(ctx)
-
-	defer func() {
-		subCount.Mu.Lock()
-		subCount.Count--
-		subCount.Mu.Unlock()
-		cancel()
-	}()
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go sendMessageSub(subClientCtx, conn, &wg)
-	wg.Add(1)
-	go acceptStreamSub(subClientCtx, conn, &wg)
-	wg.Wait()
-}
-
-var sendMessageSub = func(ctx context.Context, conn quic.Connection, wg *sync.WaitGroup) {
-	defer wg.Done()
-	logger := log.Default()
-
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				fmt.Println("sub canceled")
-				return
-			case msg := <-messageChan:
-				err := shared.WriteStream(conn, msg)
-				if err != nil {
-					logger.Printf("Failed to send message: %v", err)
-				}
-			}
-		}
-	}()
-}
-
-var acceptStreamSub = func(ctx context.Context, conn quic.Connection, wg *sync.WaitGroup) {
-	defer wg.Done()
-
-	logger := log.Default()
-
-	for {
-		_, err := conn.AcceptStream(ctx)
-		if err != nil {
-			logger.Printf("Sub closed with %v", err)
-			return
-		}
-	}
 }

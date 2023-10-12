@@ -22,8 +22,8 @@ var RunSubClient = func(ctx context.Context) {
 
 	tlsConfig = &tls.Config{InsecureSkipVerify: true}
 	quicConfig = &quic.Config{
-		MaxIdleTimeout: time.Second * 5,
-		KeepAlivePeriod: time.Second * 2,
+		MaxIdleTimeout:  time.Second * shared.MaxIdleTimeout,
+		KeepAlivePeriod: time.Second * shared.KeepAlivePeriod,
 	}
 
 	for {
