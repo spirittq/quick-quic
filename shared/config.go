@@ -13,3 +13,5 @@ const (
 	MaxIdleTimeout  = 5
 	KeepAlivePeriod = 5
 )
+
+type PostReceiveMessage func(MessageStream)

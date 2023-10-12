@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"shared"
+	"time"
 
 	"github.com/quic-go/quic-go"
 )
@@ -19,6 +20,8 @@ var InitPubServer = func(ctx context.Context, tlsConfig *tls.Config, quicConfig 
 	if err != nil {
 		log.Fatalf("Error during pub server initialization: %v", err)
 	}
+
+	go monitorSubs()
 
 	go func() {
 		for {
@@ -66,24 +69,23 @@ var sendMessageToPub = func(ctx context.Context, conn quic.Connection) {
 var receiveMessageFromPub = func(ctx context.Context, conn quic.Connection) {
 	logger := log.Default()
 
-	for {
-		stream := <-acceptStreamPubChan
+	var postReceiveMessage = func(messageStream shared.MessageStream) {
+		logger.Println("Pub message received")
+		for i := 0; i < SubCount.Count; i++ {
+			MessageChan <- messageStream
+		}
+	}
 
-		go func(stream quic.Stream) {
-			receivedData, err := shared.ReadStream(stream)
-			if err != nil {
-				logger.Printf("Failed to read message: %v", err)
-				return
+	go shared.ReceiveMessage(ctx, acceptStreamPubChan, postReceiveMessage)
+}
+
+var monitorSubs = func() {
+	for {
+		if SubCount.Count == 0 {
+			for i := 0; i < PubCount.Count; i++ {
+				NoSubsChan <- NoSubsMessage
 			}
-			unmarshalledData, err := shared.FromJson[shared.MessageStream](receivedData)
-			if err != nil {
-				logger.Printf("Failed to unmarshall message: %v", err)
-				return
-			}
-			logger.Println("Pub message received")
-			for i := 0; i < SubCount.Count; i++ {
-				MessageChan <- unmarshalledData
-			}
-		}(stream)
+			time.Sleep(time.Second * 10)
+		}
 	}
 }

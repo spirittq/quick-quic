@@ -46,20 +46,4 @@ var RunServer = func(ctx context.Context) {
 	go connections.InitSubServer(ctx, tlsConfig, quicConfig)
 
 	logger.Printf("Sub server initialization complete, listening on: %v", shared.PortSub)
-	logger.Println("Initializing sub monitoring")
-
-	go monitorSubs()
-
-	logger.Println("Sub monitoring initialized")
-}
-
-var monitorSubs = func() {
-	for {
-		if connections.SubCount.Count == 0 {
-			for i := 0; i < connections.PubCount.Count; i++ {
-				connections.NoSubsChan <- connections.NoSubsMessage
-			}
-			time.Sleep(time.Second * 10)
-		}
-	}
 }
