@@ -31,6 +31,8 @@ var RunServer = func(ctx context.Context) {
 		Certificates: []tls.Certificate{cert},
 	}
 	quicConfig := &quic.Config{
+		// MaxIdleTimeout:  time.Second * shared.MaxIdleTimeout,
+		// KeepAlivePeriod: time.Second * shared.KeepAlivePeriod,
 		MaxIdleTimeout: 5 * time.Second,
 	}
 

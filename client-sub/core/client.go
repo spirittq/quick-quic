@@ -11,17 +11,20 @@ import (
 	"github.com/quic-go/quic-go"
 )
 
+var acceptStreamChan chan quic.Stream
+
 var RunSubClient = func(ctx context.Context) {
 	logger := log.Default()
 
 	var tlsConfig *tls.Config
 	var quicConfig *quic.Config
-	acceptStreamChan := make(chan quic.Stream, 1)
+	acceptStreamChan = make(chan quic.Stream, 1)
 
 	tlsConfig = &tls.Config{InsecureSkipVerify: true}
 	quicConfig = &quic.Config{
-		MaxIdleTimeout:  time.Second * shared.MaxIdleTimeout,
-		KeepAlivePeriod: time.Second * shared.KeepAlivePeriod,
+		// MaxIdleTimeout:  time.Second * shared.MaxIdleTimeout,
+		// KeepAlivePeriod: time.Second * shared.KeepAlivePeriod,
+		MaxIdleTimeout: 5 * time.Second,
 	}
 
 	for {
@@ -33,7 +36,7 @@ var RunSubClient = func(ctx context.Context) {
 		}
 		fmt.Println("Connection established")
 
-		go receiveMessage(clientCtx, conn, acceptStreamChan)
+		go receiveMessage(clientCtx, conn)
 		err = shared.AcceptStream(clientCtx, conn, acceptStreamChan)
 		if err != nil {
 			logger.Printf("Lost connection to server with %v", err)
@@ -42,7 +45,7 @@ var RunSubClient = func(ctx context.Context) {
 	}
 }
 
-func receiveMessage(ctx context.Context, conn quic.Connection, acceptStreamChan chan quic.Stream) {
+func receiveMessage(ctx context.Context, conn quic.Connection) {
 	logger := log.Default()
 	defer ctx.Done()
 

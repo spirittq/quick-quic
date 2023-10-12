@@ -15,20 +15,21 @@ import (
 )
 
 var jugglingMessage chan shared.MessageStream
+var acceptStreamChan chan quic.Stream
 
 func RunPubClient(ctx context.Context) {
 	logger := log.Default()
 
 	var tlsConfig *tls.Config
 	var quicConfig *quic.Config
-	acceptStreamChan := make(chan quic.Stream, 1)
+	acceptStreamChan = make(chan quic.Stream, 1)
 	jugglingMessage = make(chan shared.MessageStream, 1)
-	jugglingMessage <- shared.MessageStream{Empty: true}
 
 	tlsConfig = &tls.Config{InsecureSkipVerify: true}
 	quicConfig = &quic.Config{
-		MaxIdleTimeout:  time.Second * shared.MaxIdleTimeout,
-		KeepAlivePeriod: time.Second * shared.KeepAlivePeriod,
+		// MaxIdleTimeout:  time.Second * shared.MaxIdleTimeout,
+		// KeepAlivePeriod: time.Second * shared.KeepAlivePeriod,
+		MaxIdleTimeout: 5 * time.Second,
 	}
 
 	for {
@@ -40,6 +41,7 @@ func RunPubClient(ctx context.Context) {
 		}
 		fmt.Println("Connection established")
 
+		go InputMessage()
 		go sendMessage(clientCtx, conn)
 		go receiveMessage(clientCtx, conn, acceptStreamChan)
 		err = shared.AcceptStream(clientCtx, conn, acceptStreamChan)
@@ -50,43 +52,21 @@ func RunPubClient(ctx context.Context) {
 	}
 }
 
-func sendMessage(ctx context.Context, conn quic.Connection) {
-
-	logger := log.Default()
-	initMsg := <-jugglingMessage
-
+func InputMessage() {
 	for {
 		var msg shared.MessageStream
-
-		switch {
-		case initMsg.Empty:
-			reader := bufio.NewReader(os.Stdin)
-			msg.Message, _ = reader.ReadString('\n')
-			msg.Message = strings.TrimSpace(msg.Message)
-		default:
-			msg = initMsg
-			initMsg.Empty = true
-		}
-
-		select {
-		case <-ctx.Done():
-			jugglingMessage <- msg
-			return
-		default:
-			marshalledMsg, err := shared.ToJson[shared.MessageStream](msg)
-			if err != nil {
-				logger.Printf("Failed to marshall message: %v", err)
-			}
-			err = shared.WriteStream(conn, marshalledMsg)
-			if err != nil {
-				logger.Printf("Failed to send message: %v", err)
-			}
-		}
+		reader := bufio.NewReader(os.Stdin)
+		msg.Message, _ = reader.ReadString('\n')
+		msg.Message = strings.TrimSpace(msg.Message)
+		jugglingMessage <- msg
 	}
 }
 
-func receiveMessage(ctx context.Context, conn quic.Connection, acceptStreamChan chan quic.Stream) {
+func sendMessage(ctx context.Context, conn quic.Connection) {
+	go shared.SendMessage(ctx, conn, jugglingMessage)
+}
 
+func receiveMessage(ctx context.Context, conn quic.Connection, acceptStreamChan chan quic.Stream) {
 	logger := log.Default()
 	defer ctx.Done()
 

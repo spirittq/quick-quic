@@ -11,8 +11,9 @@ import (
 )
 
 var InitPubServer = func(ctx context.Context, tlsConfig *tls.Config, quicConfig *quic.Config) {
-
 	logger := log.Default()
+
+	acceptStreamPubChan = make(chan quic.Stream, 1)
 
 	ln, err := quic.ListenAddr(fmt.Sprintf("%v:%v", shared.ServerAddr, shared.PortPub), tlsConfig, quicConfig)
 	if err != nil {
@@ -33,7 +34,6 @@ var InitPubServer = func(ctx context.Context, tlsConfig *tls.Config, quicConfig 
 }
 
 var handlePubClient = func(ctx context.Context, conn quic.Connection) {
-
 	logger := log.Default()
 	logger.Println("New Pub connected")
 
@@ -50,26 +50,24 @@ var handlePubClient = func(ctx context.Context, conn quic.Connection) {
 		cancel()
 	}()
 
-	acceptStreamChan := make(chan quic.Stream, 1)
-
 	go sendMessageToPub(pubClientCtx, conn)
-	go receiveMessageFromPub(pubClientCtx, conn, acceptStreamChan)
-	err := shared.AcceptStream(pubClientCtx, conn, acceptStreamChan)
+	go receiveMessageFromPub(pubClientCtx, conn)
+	err := shared.AcceptStream(pubClientCtx, conn, acceptStreamPubChan)
 	if err != nil {
 		logger.Printf("Pub disconnected with: %v", err)
 	}
 }
 
 var sendMessageToPub = func(ctx context.Context, conn quic.Connection) {
-	go sendMessageToClient(ctx, conn, NewSubChan)
-	go sendMessageToClient(ctx, conn, NoSubsChan)
+	go shared.SendMessage(ctx, conn, NewSubChan)
+	go shared.SendMessage(ctx, conn, NoSubsChan)
 }
 
-var receiveMessageFromPub = func(ctx context.Context, conn quic.Connection, acceptStreamChan chan quic.Stream) {
+var receiveMessageFromPub = func(ctx context.Context, conn quic.Connection) {
 	logger := log.Default()
 
 	for {
-		stream := <-acceptStreamChan
+		stream := <-acceptStreamPubChan
 
 		go func(stream quic.Stream) {
 			receivedData, err := shared.ReadStream(stream)

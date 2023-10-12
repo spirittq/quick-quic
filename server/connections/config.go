@@ -3,6 +3,8 @@ package connections
 import (
 	"shared"
 	"sync"
+
+	"github.com/quic-go/quic-go"
 )
 
 type Counter struct {
@@ -12,6 +14,7 @@ type Counter struct {
 
 var PubCount, SubCount Counter
 var MessageChan, NewSubChan, NoSubsChan chan shared.MessageStream
+var acceptStreamPubChan, acceptStreamSubChan chan quic.Stream
 
 var NewSubMessage = shared.MessageStream{
 	Message: "New subscriber has connected",
