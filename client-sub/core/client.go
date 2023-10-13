@@ -13,6 +13,8 @@ import (
 
 var acceptStreamChan chan quic.Stream
 
+// Initiates subscriber client. If successfully connected to the server, starts background processes.
+// Is blocked until stream accept fails, tries to re-connect to the server once.
 var RunSubClient = func(ctx context.Context) {
 	logger := log.Default()
 
@@ -46,6 +48,7 @@ var RunSubClient = func(ctx context.Context) {
 	}
 }
 
+// Wrapper to receive message stream and run a custom function after message stream is received.
 func receiveMessage(ctx context.Context, conn quic.Connection) {
 	logger := log.Default()
 

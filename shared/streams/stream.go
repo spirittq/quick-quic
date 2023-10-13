@@ -7,6 +7,7 @@ import (
 	"github.com/quic-go/quic-go"
 )
 
+// Reads message from the quic stream
 func ReadStream(stream quic.Stream) ([]byte, error) {
 
 	receivedData := []byte{}
@@ -20,6 +21,7 @@ func ReadStream(stream quic.Stream) ([]byte, error) {
 	return receivedData, nil
 }
 
+// Writes message to the quic stream
 func WriteStream(conn quic.Connection, msg []byte) error {
 	var closeErr error
 

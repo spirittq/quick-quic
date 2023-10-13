@@ -8,6 +8,7 @@ import (
 	"github.com/quic-go/quic-go"
 )
 
+// Waits for the channel to receive message stream, encodes it to json and sends it to the peers. Finishes if context is closed.
 var SendMessage = func(ctx context.Context, conn quic.Connection, messageChan chan MessageStream) {
 	logger := log.Default()
 
@@ -28,6 +29,7 @@ var SendMessage = func(ctx context.Context, conn quic.Connection, messageChan ch
 	}
 }
 
+// Waits for the channel to receive a quic stream, decodes json and executes custom function from the wrapper.
 var ReceiveMessage = func(ctx context.Context, acceptStreamChan chan quic.Stream, postReceiveMessage PostReceiveMessage) {
 	logger := log.Default()
 

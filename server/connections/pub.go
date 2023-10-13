@@ -11,6 +11,7 @@ import (
 	"github.com/quic-go/quic-go"
 )
 
+// Initiates publisher server and starts listening to the clients.
 var InitPubServer = func(ctx context.Context, tlsConfig *tls.Config, quicConfig *quic.Config) {
 	logger := log.Default()
 
@@ -36,6 +37,8 @@ var InitPubServer = func(ctx context.Context, tlsConfig *tls.Config, quicConfig 
 
 }
 
+// Increases publisher count upon start and decreases it upon end. Starts background processes.
+// Is blocked until stream accept fails.
 var handlePubClient = func(ctx context.Context, conn quic.Connection) {
 	logger := log.Default()
 	logger.Println("New Pub connected")
@@ -61,11 +64,13 @@ var handlePubClient = func(ctx context.Context, conn quic.Connection) {
 	}
 }
 
+// Wrapper to send message stream to publisher client.
 var sendMessageToPub = func(ctx context.Context, conn quic.Connection) {
 	go streams.SendMessage(ctx, conn, NewSubChan)
 	go streams.SendMessage(ctx, conn, NoSubsChan)
 }
 
+// Wrapper to receive message stream from publisher client and run a custom function after message stream is received.
 var receiveMessageFromPub = func(ctx context.Context, conn quic.Connection) {
 	logger := log.Default()
 
@@ -79,6 +84,7 @@ var receiveMessageFromPub = func(ctx context.Context, conn quic.Connection) {
 	go streams.ReceiveMessage(ctx, acceptStreamPubChan, postReceiveMessage)
 }
 
+// Monitors if no subscribers are connected, puts a message stream in a channel if no subscribers are connected.
 var monitorSubs = func() {
 	for {
 		if SubCount.Count == 0 {

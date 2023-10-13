@@ -10,6 +10,7 @@ import (
 	"github.com/quic-go/quic-go"
 )
 
+// Initiates subscriber server and starts listening to the clients.
 var InitSubServer = func(ctx context.Context, tlsConfig *tls.Config, quicConfig *quic.Config) {
 	logger := log.Default()
 
@@ -32,6 +33,8 @@ var InitSubServer = func(ctx context.Context, tlsConfig *tls.Config, quicConfig 
 	}()
 }
 
+// Increases subscriber count upon start and decreases it upon end. Starts background processes.
+// Is blocked until stream accept fails.
 var handleSubClient = func(ctx context.Context, conn quic.Connection) {
 	logger := log.Default()
 	logger.Println("New Sub connected")
@@ -60,6 +63,7 @@ var handleSubClient = func(ctx context.Context, conn quic.Connection) {
 	}
 }
 
+// Wrapper to send message stream to subscriber client.
 var sendMessageToSub = func(ctx context.Context, conn quic.Connection) {
 	go streams.SendMessage(ctx, conn, MessageChan)
 }

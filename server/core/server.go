@@ -2,9 +2,8 @@ package core
 
 import (
 	"context"
-	"crypto/tls"
-	"fmt"
 	"log"
+	"server/certificates"
 	"server/connections"
 	"shared/streams"
 	"time"
@@ -18,18 +17,12 @@ var RunServer = func(ctx context.Context) {
 	connections.NoSubsChan = make(chan streams.MessageStream, 1)
 	connections.NewSubChan = make(chan streams.MessageStream, 1)
 
-	logger.Println("Loading temp certificate")
+	logger.Println("Generating TLS config")
 
-	cert, err := tls.LoadX509KeyPair(fmt.Sprintf("%v%v", streams.CertPath, streams.CertTemp), fmt.Sprintf("%v%v", streams.CertPath, streams.CertKeyTemp))
-	if err != nil {
-		log.Fatal("Could not load certificates")
-	}
+	tlsConfig := certificates.GenerateTLSConfig()
 
-	logger.Println("Certificates loaded")
+	logger.Println("TLS config generated")
 
-	tlsConfig := &tls.Config{
-		Certificates: []tls.Certificate{cert},
-	}
 	quicConfig := &quic.Config{
 		MaxIdleTimeout:  time.Second * streams.MaxIdleTimeout,
 		KeepAlivePeriod: time.Second * streams.KeepAlivePeriod,
