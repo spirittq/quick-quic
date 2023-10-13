@@ -24,4 +24,4 @@ Multiple pub and sub clients are supported
 
 ### Testing
 
-*TBD.
+*TBD*
