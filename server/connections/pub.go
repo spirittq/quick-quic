@@ -5,7 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log"
-	"shared"
+	"shared/streams"
 	"time"
 
 	"github.com/quic-go/quic-go"
@@ -16,7 +16,7 @@ var InitPubServer = func(ctx context.Context, tlsConfig *tls.Config, quicConfig 
 
 	acceptStreamPubChan = make(chan quic.Stream, 1)
 
-	ln, err := quic.ListenAddr(fmt.Sprintf("%v:%v", shared.ServerAddr, shared.PortPub), tlsConfig, quicConfig)
+	ln, err := quic.ListenAddr(fmt.Sprintf("%v:%v", streams.ServerAddr, streams.PortPub), tlsConfig, quicConfig)
 	if err != nil {
 		log.Fatalf("Error during pub server initialization: %v", err)
 	}
@@ -55,28 +55,28 @@ var handlePubClient = func(ctx context.Context, conn quic.Connection) {
 
 	go sendMessageToPub(pubClientCtx, conn)
 	go receiveMessageFromPub(pubClientCtx, conn)
-	err := shared.AcceptStream(pubClientCtx, conn, acceptStreamPubChan)
+	err := streams.AcceptStream(pubClientCtx, conn, acceptStreamPubChan)
 	if err != nil {
 		logger.Printf("Pub disconnected with: %v", err)
 	}
 }
 
 var sendMessageToPub = func(ctx context.Context, conn quic.Connection) {
-	go shared.SendMessage(ctx, conn, NewSubChan)
-	go shared.SendMessage(ctx, conn, NoSubsChan)
+	go streams.SendMessage(ctx, conn, NewSubChan)
+	go streams.SendMessage(ctx, conn, NoSubsChan)
 }
 
 var receiveMessageFromPub = func(ctx context.Context, conn quic.Connection) {
 	logger := log.Default()
 
-	var postReceiveMessage = func(messageStream shared.MessageStream) {
+	var postReceiveMessage = func(messageStream streams.MessageStream) {
 		logger.Println("Pub message received")
 		for i := 0; i < SubCount.Count; i++ {
 			MessageChan <- messageStream
 		}
 	}
 
-	go shared.ReceiveMessage(ctx, acceptStreamPubChan, postReceiveMessage)
+	go streams.ReceiveMessage(ctx, acceptStreamPubChan, postReceiveMessage)
 }
 
 var monitorSubs = func() {

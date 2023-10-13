@@ -7,14 +7,14 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"shared"
+	"shared/streams"
 	"strings"
 	"time"
 
 	"github.com/quic-go/quic-go"
 )
 
-var jugglingMessage chan shared.MessageStream
+var jugglingMessage chan streams.MessageStream
 var acceptStreamChan chan quic.Stream
 
 func RunPubClient(ctx context.Context) {
@@ -23,19 +23,19 @@ func RunPubClient(ctx context.Context) {
 	var tlsConfig *tls.Config
 	var quicConfig *quic.Config
 	acceptStreamChan = make(chan quic.Stream, 1)
-	jugglingMessage = make(chan shared.MessageStream, 1)
+	jugglingMessage = make(chan streams.MessageStream, 1)
 
 	tlsConfig = &tls.Config{InsecureSkipVerify: true}
 	quicConfig = &quic.Config{
-		MaxIdleTimeout:  time.Second * shared.MaxIdleTimeout,
-		KeepAlivePeriod: time.Second * shared.KeepAlivePeriod,
+		MaxIdleTimeout:  time.Second * streams.MaxIdleTimeout,
+		KeepAlivePeriod: time.Second * streams.KeepAlivePeriod,
 	}
 
 	for {
 		logger.Println("Connecting to the server")
 
 		clientCtx, cancel := context.WithCancel(ctx)
-		conn, err := quic.DialAddr(clientCtx, fmt.Sprintf("%v:%v", shared.ServerAddr, shared.PortPub), tlsConfig, quicConfig)
+		conn, err := quic.DialAddr(clientCtx, fmt.Sprintf("%v:%v", streams.ServerAddr, streams.PortPub), tlsConfig, quicConfig)
 		if err != nil {
 			logger.Fatalf("Could not connect to the server: %v", err)
 		}
@@ -45,7 +45,7 @@ func RunPubClient(ctx context.Context) {
 		go inputMessage()
 		go sendMessage(clientCtx, conn)
 		go receiveMessage(clientCtx, conn)
-		err = shared.AcceptStream(clientCtx, conn, acceptStreamChan)
+		err = streams.AcceptStream(clientCtx, conn, acceptStreamChan)
 		if err != nil {
 			logger.Printf("Lost connection to server with %v", err)
 		}
@@ -55,7 +55,7 @@ func RunPubClient(ctx context.Context) {
 
 func inputMessage() {
 	for {
-		var msg shared.MessageStream
+		var msg streams.MessageStream
 		reader := bufio.NewReader(os.Stdin)
 		msg.Message, _ = reader.ReadString('\n')
 		msg.Message = strings.TrimSpace(msg.Message)
@@ -64,15 +64,15 @@ func inputMessage() {
 }
 
 func sendMessage(ctx context.Context, conn quic.Connection) {
-	go shared.SendMessage(ctx, conn, jugglingMessage)
+	go streams.SendMessage(ctx, conn, jugglingMessage)
 }
 
 func receiveMessage(ctx context.Context, conn quic.Connection) {
 	logger := log.Default()
 
-	var postReceiveMessage = func(messageStream shared.MessageStream) {
+	var postReceiveMessage = func(messageStream streams.MessageStream) {
 		logger.Println(messageStream.Message)
 	}
 
-	go shared.ReceiveMessage(ctx, acceptStreamChan, postReceiveMessage)
+	go streams.ReceiveMessage(ctx, acceptStreamChan, postReceiveMessage)
 }

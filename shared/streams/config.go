@@ -1,4 +1,4 @@
-package shared
+package streams
 
 const (
 	ServerAddr  = "localhost"

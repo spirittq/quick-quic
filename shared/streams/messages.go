@@ -1,8 +1,9 @@
-package shared
+package streams
 
 import (
 	"context"
 	"log"
+	"shared/utils"
 
 	"github.com/quic-go/quic-go"
 )
@@ -15,7 +16,7 @@ var SendMessage = func(ctx context.Context, conn quic.Connection, messageChan ch
 		case <-ctx.Done():
 			return
 		case msg := <-messageChan:
-			marshalledMsg, err := ToJson[MessageStream](msg)
+			marshalledMsg, err := utils.ToJson[MessageStream](msg)
 			if err != nil {
 				logger.Printf("Failed to marshal message: %v", err)
 			}
@@ -39,7 +40,7 @@ var ReceiveMessage = func(ctx context.Context, acceptStreamChan chan quic.Stream
 				logger.Printf("Failed to read message: %v", err)
 				return
 			}
-			unmarshalledData, err := FromJson[MessageStream](receivedData)
+			unmarshalledData, err := utils.FromJson[MessageStream](receivedData)
 			if err != nil {
 				logger.Printf("Failed to unmarshall message: %v", err)
 				return
