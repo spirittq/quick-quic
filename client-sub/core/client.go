@@ -16,6 +16,7 @@ var acceptStreamChan chan quic.Stream
 
 // Initiates subscriber client. If successfully connected to the server, starts background processes.
 // Is blocked until stream accept fails, tries to re-connect to the server once.
+// TODO test
 var RunSubClient = func(ctx context.Context) {
 	logger := log.Default()
 

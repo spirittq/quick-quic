@@ -12,7 +12,8 @@ import (
 	"github.com/quic-go/quic-go"
 )
 
-var RunServer = func(ctx context.Context) {
+// Server initialization with configuration.
+var RunServer = func(ctx context.Context) error {
 	logger := log.Default()
 	connections.MessageChan = make(chan streams.MessageStream, 1)
 	connections.NoSubsChan = make(chan streams.MessageStream, 1)
@@ -22,7 +23,8 @@ var RunServer = func(ctx context.Context) {
 
 	tlsConfig, err := certificates.GenerateTLSConfig()
 	if err != nil {
-		logger.Fatalf("Failed to generate TLS config: %v", err)
+		logger.Printf("Failed to generate TLS config: %v", err)
+		return err
 	}
 
 	logger.Println("TLS config generated")
@@ -42,4 +44,6 @@ var RunServer = func(ctx context.Context) {
 	go connections.InitSubServer(ctx, tlsConfig, quicConfig)
 
 	logger.Printf("Sub server initialization complete, listening on: %v", shared.PortSub)
+
+	return nil
 }

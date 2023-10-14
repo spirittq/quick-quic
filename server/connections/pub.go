@@ -13,6 +13,7 @@ import (
 )
 
 // Initiates publisher server and starts listening to the clients.
+// TODO test
 var InitPubServer = func(ctx context.Context, tlsConfig *tls.Config, quicConfig *quic.Config) {
 	logger := log.Default()
 
@@ -40,6 +41,7 @@ var InitPubServer = func(ctx context.Context, tlsConfig *tls.Config, quicConfig 
 
 // Increases publisher count upon start and decreases it upon end. Starts background processes.
 // Is blocked until stream accept fails.
+// TODO test
 var handlePubClient = func(ctx context.Context, conn quic.Connection) {
 	logger := log.Default()
 	logger.Println("New Pub connected")
@@ -77,6 +79,7 @@ var sendMessageToPub = func(ctx context.Context, conn quic.Connection) {
 var receiveMessageFromPub = func(ctx context.Context, conn quic.Connection) {
 	logger := log.Default()
 
+	// TODO test
 	var postReceiveMessage = func(messageStream streams.MessageStream) {
 		logger.Println("Pub message received")
 		for i := 0; i < SubCount.Count; i++ {
@@ -88,6 +91,7 @@ var receiveMessageFromPub = func(ctx context.Context, conn quic.Connection) {
 }
 
 // Monitors if no subscribers are connected, puts a message stream in a channel if no subscribers are connected.
+// TODO test
 var monitorSubs = func() {
 	for {
 		if SubCount.Count == 0 {

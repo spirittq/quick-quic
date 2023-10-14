@@ -8,6 +8,7 @@ import (
 )
 
 // Reads message from the quic stream
+// TODO test
 var ReadStream = func(stream quic.Stream) ([]byte, error) {
 
 	var err error
@@ -29,6 +30,7 @@ var ReadStream = func(stream quic.Stream) ([]byte, error) {
 }
 
 // Writes message to the quic stream
+// TODO test
 var WriteStream = func(conn quic.Connection, msg []byte) error {
 	var closeErr error
 
@@ -46,6 +48,7 @@ var WriteStream = func(conn quic.Connection, msg []byte) error {
 }
 
 // Waits to accept stream. When it is available, sends stream through the channel.
+// TODO test
 var AcceptStream = func(ctx context.Context, conn quic.Connection, acceptStreamChan chan quic.Stream) error {
 	for {
 		stream, err := conn.AcceptStream(ctx)

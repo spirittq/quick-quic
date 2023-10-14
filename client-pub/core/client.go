@@ -17,9 +17,11 @@ import (
 
 var jugglingMessage chan streams.MessageStream
 var acceptStreamChan chan quic.Stream
+var ReadString = (*bufio.Reader).ReadString
 
 // Initiates publisher client. If successfully connected to the server, starts background processes.
 // Is blocked until stream accept fails, tries to re-connect to the server once.
+// TODO test
 func RunPubClient(ctx context.Context) {
 	logger := log.Default()
 
@@ -64,6 +66,7 @@ func inputMessage(ctx context.Context) {
 
 	logger := log.Default()
 	var err error
+	reader := bufio.NewReader(os.Stdin)
 
 	for {
 		select {
@@ -71,10 +74,10 @@ func inputMessage(ctx context.Context) {
 			return
 		default:
 			var msg streams.MessageStream
-			reader := bufio.NewReader(os.Stdin)
-			msg.Message, err = reader.ReadString('\n')
+			msg.Message, err = ReadString(reader, '\n')
 			if err != nil {
 				logger.Printf("Failed to read input: %v", err)
+				continue
 			}
 			msg.Message = strings.TrimSpace(msg.Message)
 			jugglingMessage <- msg
