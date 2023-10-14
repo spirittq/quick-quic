@@ -79,7 +79,6 @@ var sendMessageToPub = func(ctx context.Context, conn quic.Connection) {
 var receiveMessageFromPub = func(ctx context.Context, conn quic.Connection) {
 	logger := log.Default()
 
-	// TODO test
 	var postReceiveMessage = func(messageStream streams.MessageStream) {
 		logger.Println("Pub message received")
 		for i := 0; i < SubCount.Count; i++ {
@@ -91,7 +90,6 @@ var receiveMessageFromPub = func(ctx context.Context, conn quic.Connection) {
 }
 
 // Monitors if no subscribers are connected, puts a message stream in a channel if no subscribers are connected.
-// TODO test
 var monitorSubs = func() {
 	for {
 		if SubCount.Count == 0 {
