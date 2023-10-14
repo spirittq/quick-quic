@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log"
+	"shared"
 	"shared/streams"
 	"time"
 
@@ -17,7 +18,7 @@ var InitPubServer = func(ctx context.Context, tlsConfig *tls.Config, quicConfig 
 
 	acceptStreamPubChan = make(chan quic.Stream, 1)
 
-	ln, err := quic.ListenAddr(fmt.Sprintf("%v:%v", streams.ServerAddr, streams.PortPub), tlsConfig, quicConfig)
+	ln, err := quic.ListenAddr(fmt.Sprintf("%v:%v", shared.ServerAddr, shared.PortPub), tlsConfig, quicConfig)
 	if err != nil {
 		log.Fatalf("Error during pub server initialization: %v", err)
 	}
@@ -48,6 +49,8 @@ var handlePubClient = func(ctx context.Context, conn quic.Connection) {
 	PubCount.Mu.Unlock()
 
 	pubClientCtx, cancel := context.WithCancel(ctx)
+	pubClientReceiveCtx := context.WithValue(pubClientCtx, shared.ContextName, shared.PubClientReceiveCtx)
+	pubClientSendCtx := context.WithValue(pubClientCtx, shared.ContextName, shared.PubClientSendCtx)
 
 	defer func() {
 		PubCount.Mu.Lock()
@@ -56,8 +59,8 @@ var handlePubClient = func(ctx context.Context, conn quic.Connection) {
 		cancel()
 	}()
 
-	go sendMessageToPub(pubClientCtx, conn)
-	go receiveMessageFromPub(pubClientCtx, conn)
+	go sendMessageToPub(pubClientSendCtx, conn)
+	go receiveMessageFromPub(pubClientReceiveCtx, conn)
 	err := streams.AcceptStream(pubClientCtx, conn, acceptStreamPubChan)
 	if err != nil {
 		logger.Printf("Pub disconnected with: %v", err)

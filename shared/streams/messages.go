@@ -29,25 +29,30 @@ var SendMessage = func(ctx context.Context, conn quic.Connection, messageChan ch
 	}
 }
 
-// Waits for the channel to receive a quic stream, decodes json and executes custom function from the wrapper.
+type PostReceiveMessage func(MessageStream)
+
+// Waits for the channel to receive a quic stream, decodes json and executes custom function from the wrapper. Finishes if context is closed.
 var ReceiveMessage = func(ctx context.Context, acceptStreamChan chan quic.Stream, postReceiveMessage PostReceiveMessage) {
 	logger := log.Default()
 
 	for {
-		stream := <-acceptStreamChan
-
-		go func(stream quic.Stream) {
-			receivedData, err := ReadStream(stream)
-			if err != nil {
-				logger.Printf("Failed to read message: %v", err)
-				return
-			}
-			unmarshalledData, err := utils.FromJson[MessageStream](receivedData)
-			if err != nil {
-				logger.Printf("Failed to unmarshall message: %v", err)
-				return
-			}
-			postReceiveMessage(unmarshalledData)
-		}(stream)
+		select {
+		case <-ctx.Done():
+			return
+		case stream := <-acceptStreamChan:
+			go func(stream quic.Stream) {
+				receivedData, err := ReadStream(stream)
+				if err != nil {
+					logger.Printf("Failed to read message: %v", err)
+					return
+				}
+				unmarshalledData, err := utils.FromJson[MessageStream](receivedData)
+				if err != nil {
+					logger.Printf("Failed to unmarshall message: %v", err)
+					return
+				}
+				postReceiveMessage(unmarshalledData)
+			}(stream)
+		}
 	}
 }

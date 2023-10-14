@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log"
+	"shared"
 	"shared/streams"
 	"time"
 
@@ -24,22 +25,23 @@ var RunSubClient = func(ctx context.Context) {
 
 	tlsConfig = &tls.Config{InsecureSkipVerify: true}
 	quicConfig = &quic.Config{
-		MaxIdleTimeout:  time.Second * streams.MaxIdleTimeout,
-		KeepAlivePeriod: time.Second * streams.KeepAlivePeriod,
+		MaxIdleTimeout:  time.Second * shared.MaxIdleTimeout,
+		KeepAlivePeriod: time.Second * shared.KeepAlivePeriod,
 	}
 
 	for {
 		logger.Println("Connecting to the server")
 
 		clientCtx, cancel := context.WithCancel(ctx)
-		conn, err := quic.DialAddr(clientCtx, fmt.Sprintf("%v:%v", streams.ServerAddr, streams.PortSub), tlsConfig, quicConfig)
+		clientReceiveCtx := context.WithValue(clientCtx, shared.ContextName, shared.SubClientSendCtx)
+		conn, err := quic.DialAddr(clientCtx, fmt.Sprintf("%v:%v", shared.ServerAddr, shared.PortSub), tlsConfig, quicConfig)
 		if err != nil {
 			logger.Fatalf("Could not connect to the server: %v", err)
 		}
 
 		logger.Println("Connection established")
 
-		go receiveMessage(clientCtx, conn)
+		go receiveMessage(clientReceiveCtx, conn)
 		err = streams.AcceptStream(clientCtx, conn, acceptStreamChan)
 		if err != nil {
 			logger.Printf("Lost connection to server with %v", err)

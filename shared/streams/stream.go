@@ -8,21 +8,28 @@ import (
 )
 
 // Reads message from the quic stream
-func ReadStream(stream quic.Stream) ([]byte, error) {
+var ReadStream = func(stream quic.Stream) ([]byte, error) {
 
-	receivedData := []byte{}
+	var err error
+	var n int
+	var receivedData []byte
 
 	buffer := make([]byte, 1024)
-	n, err := stream.Read(buffer)
-	if err != nil && err != io.EOF {
-		return receivedData, err
+	for err != io.EOF {
+		n, err = stream.Read(buffer)
+		if err != nil && err != io.EOF {
+			return []byte{}, err
+		}
+		receivedData = append(receivedData, buffer[:n]...)
+		if err == io.EOF {
+			break
+		}
 	}
-	receivedData = buffer[:n]
 	return receivedData, nil
 }
 
 // Writes message to the quic stream
-func WriteStream(conn quic.Connection, msg []byte) error {
+var WriteStream = func(conn quic.Connection, msg []byte) error {
 	var closeErr error
 
 	stream, err := conn.OpenStream()
@@ -38,9 +45,8 @@ func WriteStream(conn quic.Connection, msg []byte) error {
 	return closeErr
 }
 
-func AcceptStream(ctx context.Context, conn quic.Connection, acceptStreamChan chan quic.Stream) (error) {
-	defer ctx.Done()
-
+// Waits to accept stream. When it is available, sends stream through the channel.
+var AcceptStream = func(ctx context.Context, conn quic.Connection, acceptStreamChan chan quic.Stream) error {
 	for {
 		stream, err := conn.AcceptStream(ctx)
 		if err != nil {

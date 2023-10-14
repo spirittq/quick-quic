@@ -5,6 +5,7 @@ import (
 	"log"
 	"server/certificates"
 	"server/connections"
+	"shared"
 	"shared/streams"
 	"time"
 
@@ -19,23 +20,26 @@ var RunServer = func(ctx context.Context) {
 
 	logger.Println("Generating TLS config")
 
-	tlsConfig := certificates.GenerateTLSConfig()
+	tlsConfig, err := certificates.GenerateTLSConfig()
+	if err != nil {
+		logger.Fatalf("Failed to generate TLS config: %v", err)
+	}
 
 	logger.Println("TLS config generated")
 
 	quicConfig := &quic.Config{
-		MaxIdleTimeout:  time.Second * streams.MaxIdleTimeout,
-		KeepAlivePeriod: time.Second * streams.KeepAlivePeriod,
+		MaxIdleTimeout:  time.Second * shared.MaxIdleTimeout,
+		KeepAlivePeriod: time.Second * shared.KeepAlivePeriod,
 	}
 
 	logger.Println("Initializing pub server")
 
 	go connections.InitPubServer(ctx, tlsConfig, quicConfig)
 
-	logger.Printf("Pub server initialization complete, listening on: %v", streams.PortPub)
+	logger.Printf("Pub server initialization complete, listening on: %v", shared.PortPub)
 	logger.Println("Initializing sub server")
 
 	go connections.InitSubServer(ctx, tlsConfig, quicConfig)
 
-	logger.Printf("Sub server initialization complete, listening on: %v", streams.PortSub)
+	logger.Printf("Sub server initialization complete, listening on: %v", shared.PortSub)
 }

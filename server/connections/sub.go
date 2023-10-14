@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log"
+	"shared"
 	"shared/streams"
 
 	"github.com/quic-go/quic-go"
@@ -16,7 +17,7 @@ var InitSubServer = func(ctx context.Context, tlsConfig *tls.Config, quicConfig 
 
 	acceptStreamSubChan = make(chan quic.Stream, 1)
 
-	ln, err := quic.ListenAddr(fmt.Sprintf("%v:%v", streams.ServerAddr, streams.PortSub), tlsConfig, quicConfig)
+	ln, err := quic.ListenAddr(fmt.Sprintf("%v:%v", shared.ServerAddr, shared.PortSub), tlsConfig, quicConfig)
 	if err != nil {
 		log.Fatalf("Error during sub server initialization: %v", err)
 	}
@@ -48,6 +49,7 @@ var handleSubClient = func(ctx context.Context, conn quic.Connection) {
 	SubCount.Mu.Unlock()
 
 	subClientCtx, cancel := context.WithCancel(ctx)
+	subClientSendCtx := context.WithValue(subClientCtx, shared.ContextName, shared.SubClientSendCtx)
 
 	defer func() {
 		SubCount.Mu.Lock()
@@ -56,7 +58,7 @@ var handleSubClient = func(ctx context.Context, conn quic.Connection) {
 		cancel()
 	}()
 
-	go sendMessageToSub(subClientCtx, conn)
+	go sendMessageToSub(subClientSendCtx, conn)
 	err := streams.AcceptStream(subClientCtx, conn, acceptStreamSubChan)
 	if err != nil {
 		logger.Printf("Sub disconnected with: %v", err)
