@@ -141,7 +141,7 @@ var InitPubServerTestCases = []struct {
 		Success:                false,
 	},
 	{
-		Description: "If accepting connection fails, then continues to accept another one",
+		Description:            "If accepting connection fails, then continues to accept another one",
 		QuicListenAddrResposne: &quic.Listener{},
 		QuicListenAddrError:    nil,
 		LnAcceptError:          errors.New("error"),
@@ -190,6 +190,57 @@ func TestInitPubServer(t *testing.T) {
 			}
 			time.Sleep(1 * time.Second)
 			assert.Equal(t, testCase.LnAcceptExecutionCount, actualLnAcceptExecutionCount)
+		})
+	}
+}
+
+var HandlePubClientTestCases = []struct {
+	Description       string
+	AcceptStreamError error
+	PubCount          int
+}{
+	{
+		Description:       "Successfully handles pub client",
+		AcceptStreamError: nil,
+		PubCount:          1,
+	},
+	{
+		Description:       "Pub disconnects",
+		AcceptStreamError: errors.New("error"),
+		PubCount:          0,
+	},
+}
+
+func TestHandlePubClient(t *testing.T) {
+
+	_sendMessageToPub := sendMessageToPub
+	_receiveMessageFromPub := receiveMessageFromPub
+
+	defer func() {
+		sendMessageToPub = _sendMessageToPub
+		receiveMessageFromPub = _receiveMessageFromPub
+	}()
+
+	for _, testCase := range HandlePubClientTestCases {
+		t.Run(testCase.Description, func(t *testing.T) {
+
+			PubCount = Counter{}
+
+			var testConnection quic.Connection
+
+			sendMessageToPub = func(ctx context.Context, conn quic.Connection) {}
+			receiveMessageFromPub = func(ctx context.Context, conn quic.Connection) {}
+			streams.AcceptStream = func(ctx context.Context, conn quic.Connection, acceptStreamChan chan quic.Stream) error {
+				for {
+					if testCase.AcceptStreamError != nil {
+						break
+					}
+				}
+				return testCase.AcceptStreamError
+			}
+			go handlePubClient(context.TODO(), testConnection)
+			time.Sleep(1 * time.Second)
+			assert.Equal(t, testCase.PubCount, PubCount.Count)
 		})
 	}
 }

@@ -37,7 +37,6 @@ var InitSubServer = func(ctx context.Context, tlsConfig *tls.Config, quicConfig 
 
 // Increases subscriber count upon start and decreases it upon end. Starts background processes.
 // Is blocked until stream accept fails.
-// TODO test
 var handleSubClient = func(ctx context.Context, conn quic.Connection) {
 	logger := log.Default()
 	logger.Println("New Sub connected")

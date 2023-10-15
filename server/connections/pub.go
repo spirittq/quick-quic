@@ -42,7 +42,6 @@ var InitPubServer = func(ctx context.Context, tlsConfig *tls.Config, quicConfig 
 
 // Increases publisher count upon start and decreases it upon end. Starts background processes.
 // Is blocked until stream accept fails.
-// TODO test
 var handlePubClient = func(ctx context.Context, conn quic.Connection) {
 	logger := log.Default()
 	logger.Println("New Pub connected")

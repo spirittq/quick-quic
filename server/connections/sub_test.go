@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"shared/streams"
 	"testing"
 	"time"
 
@@ -81,6 +82,54 @@ func TestInitSubServer(t *testing.T) {
 			}
 			time.Sleep(1 * time.Second)
 			assert.Equal(t, testCase.LnAcceptExecutionCount, actualLnAcceptExecutionCount)
+		})
+	}
+}
+
+var HandleSubClientTestCases = []struct {
+	Description       string
+	AcceptStreamError error
+	SubCount          int
+}{
+	{
+		Description:       "Successfully handles sub client",
+		AcceptStreamError: nil,
+		SubCount:          1,
+	},
+	{
+		Description:       "Sub disconnects",
+		AcceptStreamError: errors.New("error"),
+		SubCount:          0,
+	},
+}
+
+func TestHandleSubClient(t *testing.T) {
+
+	_sendMessageToSub := sendMessageToSub
+
+	defer func() {
+		sendMessageToSub = _sendMessageToSub
+	}()
+
+	for _, testCase := range HandleSubClientTestCases {
+		t.Run(testCase.Description, func(t *testing.T) {
+
+			SubCount = Counter{}
+
+			var testConnection quic.Connection
+
+			sendMessageToSub = func(ctx context.Context, conn quic.Connection) {}
+			streams.AcceptStream = func(ctx context.Context, conn quic.Connection, acceptStreamChan chan quic.Stream) error {
+				for {
+					if testCase.AcceptStreamError != nil {
+						break
+					}
+				}
+				return testCase.AcceptStreamError
+			}
+			go handleSubClient(context.TODO(), testConnection)
+			time.Sleep(1 * time.Second)
+			assert.Equal(t, testCase.SubCount, SubCount.Count)
 		})
 	}
 }
