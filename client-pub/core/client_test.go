@@ -40,14 +40,17 @@ func TestInputMessage(t *testing.T) {
 		t.Run(testCase.Description, func(t *testing.T) {
 
 			jugglingMessage = make(chan streams.MessageStream, 1)
+			readStringChan := make(chan bool, 1)
 
 			ReadString = func(b *bufio.Reader, delim byte) (string, error) {
+				<- readStringChan
 				return testCase.ReadStringResponse, testCase.ReadStringError
 			}
 
 			ctx := context.TODO()
 			go inputMessage(ctx)
-			time.Sleep(2 * time.Second)
+			readStringChan <- true
+			time.Sleep(1 * time.Second)
 
 			assert.Equal(t, testCase.ExpectedChannelLen, len(jugglingMessage))
 			if testCase.Success {

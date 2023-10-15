@@ -12,23 +12,24 @@ import (
 	"github.com/quic-go/quic-go"
 )
 
+
+
 // Initiates publisher server and starts listening to the clients.
-// TODO test
-var InitPubServer = func(ctx context.Context, tlsConfig *tls.Config, quicConfig *quic.Config) {
+var InitPubServer = func(ctx context.Context, tlsConfig *tls.Config, quicConfig *quic.Config) error {
 	logger := log.Default()
 
 	acceptStreamPubChan = make(chan quic.Stream, 1)
 
-	ln, err := quic.ListenAddr(fmt.Sprintf("%v:%v", shared.ServerAddr, shared.PortPub), tlsConfig, quicConfig)
+	ln, err := quicListenAddr(fmt.Sprintf("%v:%v", shared.ServerAddr, shared.PortPub), tlsConfig, quicConfig)
 	if err != nil {
-		log.Fatalf("Error during pub server initialization: %v", err)
+		return err
 	}
 
 	go monitorSubs()
 
 	go func() {
 		for {
-			conn, err := ln.Accept(ctx)
+			conn, err := lnAccept(ln, ctx)
 			if err != nil {
 				logger.Printf("Failed to accept pub client connection: %v", err)
 				continue
@@ -36,7 +37,7 @@ var InitPubServer = func(ctx context.Context, tlsConfig *tls.Config, quicConfig 
 			go handlePubClient(ctx, conn)
 		}
 	}()
-
+	return nil
 }
 
 // Increases publisher count upon start and decreases it upon end. Starts background processes.

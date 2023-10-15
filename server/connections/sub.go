@@ -12,20 +12,19 @@ import (
 )
 
 // Initiates subscriber server and starts listening to the clients.
-// TODO test
-var InitSubServer = func(ctx context.Context, tlsConfig *tls.Config, quicConfig *quic.Config) {
+var InitSubServer = func(ctx context.Context, tlsConfig *tls.Config, quicConfig *quic.Config) error {
 	logger := log.Default()
 
 	acceptStreamSubChan = make(chan quic.Stream, 1)
 
-	ln, err := quic.ListenAddr(fmt.Sprintf("%v:%v", shared.ServerAddr, shared.PortSub), tlsConfig, quicConfig)
+	ln, err := quicListenAddr(fmt.Sprintf("%v:%v", shared.ServerAddr, shared.PortSub), tlsConfig, quicConfig)
 	if err != nil {
-		log.Fatalf("Error during sub server initialization: %v", err)
+		return err
 	}
 
 	go func() {
 		for {
-			conn, err := ln.Accept(ctx)
+			conn, err := lnAccept(ln, ctx)
 			if err != nil {
 				logger.Printf("Failed to accept sub client connection: %v", err)
 				continue
@@ -33,6 +32,7 @@ var InitSubServer = func(ctx context.Context, tlsConfig *tls.Config, quicConfig 
 			go handleSubClient(ctx, conn)
 		}
 	}()
+	return nil
 }
 
 // Increases subscriber count upon start and decreases it upon end. Starts background processes.

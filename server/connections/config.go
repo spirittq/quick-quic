@@ -23,3 +23,6 @@ var NewSubMessage = streams.MessageStream{
 var NoSubsMessage = streams.MessageStream{
 	Message: "No subscribers are connected",
 }
+
+var quicListenAddr = quic.ListenAddr
+var lnAccept = (*quic.Listener).Accept

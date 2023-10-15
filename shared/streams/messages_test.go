@@ -26,6 +26,11 @@ var SendMessageTestCases = []struct {
 
 func TestSendMessage(t *testing.T) {
 
+	_WriteStream := WriteStream
+	defer func() {
+		WriteStream = _WriteStream
+	}()
+
 	testMessageChan := make(chan MessageStream, 1)
 	var testConnection quic.Connection
 
@@ -73,6 +78,11 @@ var ReceiveMessageTestCases = []struct {
 
 func TestReceiveMessage(t *testing.T) {
 
+	_ReadStream := ReadStream
+	defer func() {
+		ReadStream = _ReadStream
+	}()
+
 	testAcceptStreamChan := make(chan quic.Stream, 1)
 	var testStream quic.Stream
 
@@ -94,7 +104,7 @@ func TestReceiveMessage(t *testing.T) {
 
 			go ReceiveMessage(ctx, testAcceptStreamChan, postReceiveMessage)
 			testAcceptStreamChan <- testStream
-			time.Sleep(2 * time.Second)
+			time.Sleep(1 * time.Second)
 			assert.Equal(t, testCase.ExpectedExecutedCount, executed)
 		})
 	}

@@ -2,6 +2,8 @@ package connections
 
 import (
 	"context"
+	"crypto/tls"
+	"errors"
 	"shared/streams"
 	"testing"
 	"time"
@@ -51,7 +53,7 @@ func TestReceiveMessageFromPub(t *testing.T) {
 
 			acceptStreamPubChan <- testStream
 			go receiveMessageFromPub(context.TODO(), testConnection)
-			time.Sleep(2 * time.Second)
+			time.Sleep(1 * time.Second)
 
 			for i := 0; i < SubCount.Count; i++ {
 				actualMessage := <-MessageChan
@@ -63,7 +65,7 @@ func TestReceiveMessageFromPub(t *testing.T) {
 	}
 }
 
-var MonitorSubtestCases = []struct {
+var MonitorSubTestCases = []struct {
 	Description           string
 	SubCount              int
 	PubCount              int
@@ -102,14 +104,92 @@ var MonitorSubtestCases = []struct {
 }
 
 func TestMonitorsSub(t *testing.T) {
-	for _, testCase := range MonitorSubtestCases {
+	for _, testCase := range MonitorSubTestCases {
 		t.Run(testCase.Description, func(t *testing.T) {
 			NoSubsChan = make(chan streams.MessageStream, 1)
 			SubCount.Count = testCase.SubCount
 			PubCount.Count = testCase.PubCount
 			go monitorSubs()
-			time.Sleep(2 * time.Second)
+			time.Sleep(1 * time.Second)
 			assert.Equal(t, testCase.expectedChannelLength, len(NoSubsChan))
+		})
+	}
+}
+
+var InitPubServerTestCases = []struct {
+	Description            string
+	QuicListenAddrResposne *quic.Listener
+	QuicListenAddrError    error
+	LnAcceptError          error
+	LnAcceptExecutionCount int
+	Success                bool
+}{
+	{
+		Description:            "Successfully initiates pub server",
+		QuicListenAddrResposne: &quic.Listener{},
+		QuicListenAddrError:    nil,
+		LnAcceptError:          nil,
+		LnAcceptExecutionCount: 2,
+		Success:                true,
+	},
+	{
+		Description:            "Fails to initiate pub server",
+		QuicListenAddrResposne: nil,
+		QuicListenAddrError:    errors.New("error"),
+		LnAcceptError:          nil,
+		LnAcceptExecutionCount: 0,
+		Success:                false,
+	},
+	{
+		Description: "If accepting connection fails, then continues to accept another one",
+		QuicListenAddrResposne: &quic.Listener{},
+		QuicListenAddrError:    nil,
+		LnAcceptError:          errors.New("error"),
+		LnAcceptExecutionCount: 2,
+		Success:                true,
+	},
+}
+
+func TestInitPubServer(t *testing.T) {
+
+	_monitorSubs := monitorSubs
+	_handlePubClient := handlePubClient
+
+	defer func() {
+		monitorSubs = _monitorSubs
+		handlePubClient = _handlePubClient
+	}()
+
+	for _, testCase := range InitPubServerTestCases {
+		t.Run(testCase.Description, func(t *testing.T) {
+
+			var actualLnAcceptExecutionCount int
+			acceptedChan := make(chan bool, 1)
+
+			quicListenAddr = func(addr string, tlsConf *tls.Config, config *quic.Config) (*quic.Listener, error) {
+				return testCase.QuicListenAddrResposne, testCase.QuicListenAddrError
+			}
+
+			lnAccept = func(l *quic.Listener, ctx context.Context) (quic.Connection, error) {
+				actualLnAcceptExecutionCount++
+				<-acceptedChan
+				var conn quic.Connection
+				return conn, testCase.LnAcceptError
+			}
+
+			monitorSubs = func() {}
+
+			handlePubClient = func(ctx context.Context, conn quic.Connection) {}
+
+			err := InitPubServer(context.TODO(), &tls.Config{}, &quic.Config{})
+			acceptedChan <- true
+			if testCase.Success {
+				assert.Nil(t, err)
+			} else {
+				assert.Error(t, err)
+			}
+			time.Sleep(1 * time.Second)
+			assert.Equal(t, testCase.LnAcceptExecutionCount, actualLnAcceptExecutionCount)
 		})
 	}
 }

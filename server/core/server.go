@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"errors"
 	"log"
 	"server/certificates"
 	"server/connections"
@@ -23,8 +24,7 @@ var RunServer = func(ctx context.Context) error {
 
 	tlsConfig, err := certificates.GenerateTLSConfig()
 	if err != nil {
-		logger.Printf("Failed to generate TLS config: %v", err)
-		return err
+		return errors.Join(errors.New("error during tls config generation"), err)
 	}
 
 	logger.Println("TLS config generated")
@@ -36,12 +36,18 @@ var RunServer = func(ctx context.Context) error {
 
 	logger.Println("Initializing pub server")
 
-	go connections.InitPubServer(ctx, tlsConfig, quicConfig)
+	err = connections.InitPubServer(ctx, tlsConfig, quicConfig)
+	if err != nil {
+		return errors.Join(errors.New("error during pub server initialization"), err)
+	}
 
 	logger.Printf("Pub server initialization complete, listening on: %v", shared.PortPub)
 	logger.Println("Initializing sub server")
 
-	go connections.InitSubServer(ctx, tlsConfig, quicConfig)
+	err = connections.InitSubServer(ctx, tlsConfig, quicConfig)
+	if err != nil {
+		return errors.Join(errors.New("error during sub server initialization"), err)
+	}
 
 	logger.Printf("Sub server initialization complete, listening on: %v", shared.PortSub)
 

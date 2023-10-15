@@ -14,7 +14,10 @@ func main() {
 	ctx := context.Background()
 	defer ctx.Done()
 
-	go core.RunServer(ctx)
+	err := core.RunServer(ctx)
+	if err != nil {
+		log.Fatalf("Could not start server: %v", err)
+	}
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt)
