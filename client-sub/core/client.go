@@ -13,10 +13,10 @@ import (
 )
 
 var acceptStreamChan chan quic.Stream
+var quicDialAddr = quic.DialAddr
 
 // Initiates subscriber client. If successfully connected to the server, starts background processes.
-// Is blocked until stream accept fails, tries to re-connect to the server once.
-// TODO test
+// Is blocked until stream accept fails, tries to re-connect to the server.
 var RunSubClient = func(ctx context.Context) {
 	logger := log.Default()
 
@@ -35,9 +35,11 @@ var RunSubClient = func(ctx context.Context) {
 
 		clientCtx, cancel := context.WithCancel(ctx)
 		clientReceiveCtx := context.WithValue(clientCtx, shared.ContextName, shared.SubClientSendCtx)
-		conn, err := quic.DialAddr(clientCtx, fmt.Sprintf("%v:%v", shared.ServerAddr, shared.PortSub), tlsConfig, quicConfig)
+		conn, err := quicDialAddr(clientCtx, fmt.Sprintf("%v:%v", shared.ServerAddr, shared.PortSub), tlsConfig, quicConfig)
 		if err != nil {
-			logger.Fatalf("Could not connect to the server: %v", err)
+			logger.Printf("Could not connect to the server: %v", err)
+			cancel()
+			continue
 		}
 
 		logger.Println("Connection established")
@@ -52,7 +54,7 @@ var RunSubClient = func(ctx context.Context) {
 }
 
 // Wrapper to receive message stream and run a custom function after message stream is received.
-func receiveMessage(ctx context.Context, conn quic.Connection) {
+var receiveMessage = func(ctx context.Context, conn quic.Connection) {
 	logger := log.Default()
 
 	var postReceiveMessage = func(messageStream streams.MessageStream) {

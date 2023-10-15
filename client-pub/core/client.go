@@ -18,10 +18,10 @@ import (
 var jugglingMessage chan streams.MessageStream
 var acceptStreamChan chan quic.Stream
 var ReadString = (*bufio.Reader).ReadString
+var quicDialAddr = quic.DialAddr
 
 // Initiates publisher client. If successfully connected to the server, starts background processes.
-// Is blocked until stream accept fails, tries to re-connect to the server once.
-// TODO test
+// Is blocked until stream accept fails, tries to re-connect to the server.
 func RunPubClient(ctx context.Context) {
 	logger := log.Default()
 
@@ -43,9 +43,11 @@ func RunPubClient(ctx context.Context) {
 		clientInputCtx := context.WithValue(clientCtx, shared.ContextName, shared.PubClientInputCtx)
 		clientSendCtx := context.WithValue(clientCtx, shared.ContextName, shared.PubClientSendCtx)
 		clientReceiveCtx := context.WithValue(clientCtx, shared.ContextName, shared.PubClientReceiveCtx)
-		conn, err := quic.DialAddr(clientCtx, fmt.Sprintf("%v:%v", shared.ServerAddr, shared.PortPub), tlsConfig, quicConfig)
+		conn, err := quicDialAddr(clientCtx, fmt.Sprintf("%v:%v", shared.ServerAddr, shared.PortPub), tlsConfig, quicConfig)
 		if err != nil {
-			logger.Fatalf("Could not connect to the server: %v", err)
+			logger.Printf("Could not connect to the server: %v", err)
+			cancel()
+			continue
 		}
 
 		logger.Println("Connection established")
@@ -62,7 +64,7 @@ func RunPubClient(ctx context.Context) {
 }
 
 // Allows client to read publisher's input and put it into channel for sending message streams.
-func inputMessage(ctx context.Context) {
+var inputMessage = func(ctx context.Context) {
 
 	logger := log.Default()
 	var err error
@@ -87,12 +89,12 @@ func inputMessage(ctx context.Context) {
 }
 
 // Wrapper to send message stream.
-func sendMessage(ctx context.Context, conn quic.Connection) {
+var sendMessage = func(ctx context.Context, conn quic.Connection) {
 	go streams.SendMessage(ctx, conn, jugglingMessage)
 }
 
 // Wrapper to receive message stream and run a custom function after message stream is received.
-func receiveMessage(ctx context.Context, conn quic.Connection) {
+var receiveMessage = func(ctx context.Context, conn quic.Connection) {
 	logger := log.Default()
 
 	var postReceiveMessage = func(messageStream streams.MessageStream) {
