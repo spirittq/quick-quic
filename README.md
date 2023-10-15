@@ -24,4 +24,7 @@ Multiple pub and sub clients are supported
 
 ### Testing
 
-*TBD*
+To run tests for all files, execute this command from the root:
+```
+go test -v go ./shared/... ./client-sub/... ./client-pub/... ./server/...
+```
